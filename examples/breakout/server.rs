@@ -16,7 +16,7 @@ use bevy_quinnet::{
 };
 
 use crate::{
-    protocol::{ClientMessage, PaddleInput, ServerChannel, ServerMessage},
+    protocol::{ClientMessage, PaddleInput, PaddleInputs, ServerChannel, ServerMessage},
     Velocity, WallLocation, BALL_DIAMETER, BALL_SIZE, BALL_SPEED, BOTTOM_WALL, BRICK_SIZE,
     GAP_BETWEEN_BRICKS, GAP_BETWEEN_BRICKS_AND_SIDES, GAP_BETWEEN_PADDLE_AND_BRICKS,
     GAP_BETWEEN_PADDLE_AND_FLOOR, LEFT_WALL, LOCAL_BIND_IP, PADDLE_PADDING, PADDLE_SIZE,
@@ -36,7 +36,7 @@ const PADDLES_STARTING_POSITION: [Vec3; 2] = [
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Player {
-    input: PaddleInput,
+    input: PaddleInputs,
 }
 
 #[derive(Resource, Debug, Clone, Default)]
@@ -109,7 +109,7 @@ pub(crate) fn handle_server_events(
             players.map.insert(
                 client.id,
                 Player {
-                    input: PaddleInput::None,
+                    input: PaddleInputs::default(),
                 },
             );
             if players.map.len() == 2 {
@@ -125,37 +125,49 @@ pub(crate) fn update_paddles(
     mut paddles: Query<(&mut Transform, &Paddle, Entity)>,
 ) {
     for (mut paddle_transform, paddle, paddle_entity) in paddles.iter_mut() {
-        if let Some(player) = players.map.get(&paddle.player_id) {
-            if player.input != PaddleInput::None {
-                let mut direction = 0.0;
-                match player.input {
-                    PaddleInput::Left => direction -= 1.0,
-                    PaddleInput::Right => direction = 1.0,
-                    _ => {}
-                }
-                // Calculate the new horizontal paddle position based on player input
-                let new_paddle_position =
-                    paddle_transform.translation.x + direction * PADDLE_SPEED * TIME_STEP;
-
-                // Update the paddle position,
-                // making sure it doesn't cause the paddle to leave the arena
-                let left_bound =
-                    LEFT_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.x / 2.0 + PADDLE_PADDING;
-                let right_bound =
-                    RIGHT_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.x / 2.0 - PADDLE_PADDING;
-
-                paddle_transform.translation.x = new_paddle_position.clamp(left_bound, right_bound);
-
-                server.endpoint_mut().try_send_group_message_on(
-                    players.map.keys(),
-                    ServerChannel::PaddleUpdates,
-                    ServerMessage::PaddleMoved {
-                        entity: paddle_entity,
-                        position: paddle_transform.translation,
-                    },
-                );
-            }
+        dbg!(paddle.player_id);
+        let player = players.map.get(&paddle.player_id).unwrap();
+        if player.input == PaddleInputs::default() {
+            continue;
         }
+        if player.input.input_ad != PaddleInput::default() {
+            dbg!(player.input.input_ad);
+        }
+        if player.input.input_lr != PaddleInput::default() {
+            dbg!(player.input.input_lr);
+        }
+        let direction = if paddle.player_id == 1 {
+            match player.input.input_ad {
+                PaddleInput::Left => -1.0,
+                PaddleInput::Right => 1.0,
+                _ => 0.0,
+            }
+        } else {
+            match player.input.input_lr {
+                PaddleInput::Left => -1.0,
+                PaddleInput::Right => 1.0,
+                _ => 0.0,
+            }
+        };
+        // Calculate the new horizontal paddle position based on player input
+        let new_paddle_position =
+            paddle_transform.translation.x + direction * PADDLE_SPEED * TIME_STEP;
+
+        // Update the paddle position,
+        // making sure it doesn't cause the paddle to leave the arena
+        let left_bound = LEFT_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.x / 2.0 + PADDLE_PADDING;
+        let right_bound = RIGHT_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.x / 2.0 - PADDLE_PADDING;
+
+        paddle_transform.translation.x = new_paddle_position.clamp(left_bound, right_bound);
+
+        server.endpoint_mut().try_send_group_message_on(
+            players.map.keys(),
+            ServerChannel::PaddleUpdates,
+            ServerMessage::PaddleMoved {
+                entity: paddle_entity,
+                position: paddle_transform.translation,
+            },
+        );
     }
 }
 

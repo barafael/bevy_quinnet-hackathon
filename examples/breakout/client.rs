@@ -26,7 +26,7 @@ use bevy_quinnet::{
 };
 
 use crate::{
-    protocol::{ClientChannel, ClientMessage, PaddleInput, ServerMessage},
+    protocol::{ClientChannel, ClientMessage, PaddleInput, PaddleInputs, ServerMessage},
     BrickId, CollisionEvent, CollisionSound, GameState, Score, Velocity, WallLocation, BALL_SIZE,
     BALL_SPEED, BRICK_SIZE, GAP_BETWEEN_BRICKS, LOCAL_BIND_IP, PADDLE_SIZE, SERVER_HOST,
     SERVER_PORT, TIME_STEP,
@@ -234,7 +234,7 @@ pub(crate) fn handle_server_messages(
 
 #[derive(Default)]
 pub(crate) struct PaddleState {
-    current_input: PaddleInput,
+    current_input: PaddleInputs,
 }
 
 pub(crate) fn move_paddle(
@@ -242,27 +242,30 @@ pub(crate) fn move_paddle(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut local: Local<PaddleState>,
 ) {
-    let mut paddle_input = PaddleInput::None;
+    let mut paddle_input = PaddleInputs {
+        input_ad: PaddleInput::None,
+        input_lr: PaddleInput::None,
+    };
 
     if keyboard_input.pressed(KeyCode::KeyA) {
-        paddle_input = PaddleInput::KeyA;
+        paddle_input.input_ad = PaddleInput::Left;
     }
     if keyboard_input.pressed(KeyCode::KeyD) {
-        paddle_input = PaddleInput::KeyD;
+        paddle_input.input_ad = PaddleInput::Right;
     }
 
     if keyboard_input.pressed(KeyCode::ArrowLeft) {
-        paddle_input = PaddleInput::Left;
+        paddle_input.input_lr = PaddleInput::Left;
     }
     if keyboard_input.pressed(KeyCode::ArrowRight) {
-        paddle_input = PaddleInput::Right;
+        paddle_input.input_lr = PaddleInput::Right;
     }
 
     if local.current_input != paddle_input {
         client.connection_mut().try_send_message_on(
             ClientChannel::PaddleCommands,
             ClientMessage::PaddleInput {
-                input: paddle_input.clone(),
+                input: paddle_input,
             },
         );
         local.current_input = paddle_input;

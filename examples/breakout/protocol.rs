@@ -7,20 +7,24 @@ use serde::{Deserialize, Serialize};
 
 use crate::BrickId;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Eq, PartialEq, Clone, Default, Copy, Deserialize, Serialize)]
+pub(crate) struct PaddleInputs {
+    pub input_ad: PaddleInput,
+    pub input_lr: PaddleInput,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, Copy)]
 pub(crate) enum PaddleInput {
     #[default]
     None,
     Left,
     Right,
-    KeyA,
-    KeyD,
 }
 
 // Messages from clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum ClientMessage {
-    PaddleInput { input: PaddleInput },
+    PaddleInput { input: PaddleInputs },
 }
 
 // Messages from the server
