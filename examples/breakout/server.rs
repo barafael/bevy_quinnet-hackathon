@@ -17,7 +17,7 @@ use bevy_quinnet::{
 
 use crate::{
     protocol::{ClientMessage, PaddleInput, ServerChannel, ServerMessage},
-    BrickId, Velocity, WallLocation, BALL_DIAMETER, BALL_SIZE, BALL_SPEED, BOTTOM_WALL, BRICK_SIZE,
+    Velocity, WallLocation, BALL_DIAMETER, BALL_SIZE, BALL_SPEED, BOTTOM_WALL, BRICK_SIZE,
     GAP_BETWEEN_BRICKS, GAP_BETWEEN_BRICKS_AND_SIDES, GAP_BETWEEN_PADDLE_AND_BRICKS,
     GAP_BETWEEN_PADDLE_AND_FLOOR, LEFT_WALL, LOCAL_BIND_IP, PADDLE_PADDING, PADDLE_SIZE,
     PADDLE_SPEED, RIGHT_WALL, SERVER_HOST, SERVER_PORT, TIME_STEP, TOP_WALL, WALL_THICKNESS,
@@ -26,18 +26,7 @@ use crate::{
 const GAP_BETWEEN_PADDLE_AND_BALL: f32 = 35.;
 
 // We set the z-value of the ball to 1 so it renders on top in the case of overlapping sprites.
-const BALLS_STARTING_POSITION: [Vec3; 2] = [
-    Vec3::new(
-        0.0,
-        BOTTOM_WALL + GAP_BETWEEN_PADDLE_AND_FLOOR + GAP_BETWEEN_PADDLE_AND_BALL,
-        1.0,
-    ),
-    Vec3::new(
-        0.0,
-        TOP_WALL - GAP_BETWEEN_PADDLE_AND_FLOOR - GAP_BETWEEN_PADDLE_AND_BALL,
-        1.0,
-    ),
-];
+const BALLS_STARTING_POSITION: [Vec3; 1] = [Vec3::new(0.0, 0.0, 0.0)];
 const INITIAL_BALLS_DIRECTION: [Vec2; 2] = [Vec2::new(0.5, -0.5), Vec2::new(-0.5, 0.5)];
 
 const PADDLES_STARTING_POSITION: [Vec3; 2] = [
@@ -59,9 +48,6 @@ pub(crate) struct Players {
 pub(crate) struct Paddle {
     player_id: ClientId,
 }
-
-#[derive(Component)]
-pub(crate) struct Brick(BrickId);
 
 #[derive(Component)]
 pub(crate) struct Collider;
@@ -174,14 +160,14 @@ pub(crate) fn update_paddles(
 }
 
 pub(crate) fn check_for_collisions(
-    mut commands: Commands,
+    commands: Commands,
     mut server: ResMut<QuinnetServer>,
     mut ball_query: Query<(&mut Velocity, &Transform, Entity, &mut Ball)>,
-    collider_query: Query<(Entity, &Transform, Option<&Brick>, Option<&Paddle>), With<Collider>>,
+    collider_query: Query<(Entity, &Transform, Option<&Paddle>), With<Collider>>,
 ) {
     for (mut ball_velocity, ball_transform, ball_entity, mut ball) in ball_query.iter_mut() {
         // check collision with walls
-        for (collider_entity, transform, maybe_brick, maybe_paddle) in &collider_query {
+        for (collider_entity, transform, maybe_paddle) in &collider_query {
             let collision = collide_with_side(
                 BoundingCircle::new(ball_transform.translation.truncate(), BALL_DIAMETER / 2.),
                 Aabb2d::new(
@@ -197,18 +183,6 @@ pub(crate) fn check_for_collisions(
                 }
 
                 let endpoint = server.endpoint_mut();
-                // Bricks should be despawned on collision
-                if let Some(brick) = maybe_brick {
-                    commands.entity(collider_entity).despawn();
-
-                    endpoint.try_broadcast_message_on(
-                        ServerChannel::GameEvents,
-                        ServerMessage::BrickDestroyed {
-                            by_client_id: ball.last_hit_by,
-                            brick_id: brick.0,
-                        },
-                    );
-                }
 
                 // reflect the ball when it collides
                 let mut reflect_x = false;
@@ -231,6 +205,17 @@ pub(crate) fn check_for_collisions(
                 // reflect velocity on the y-axis if we hit something on the y-axis
                 if reflect_y {
                     ball_velocity.y = -ball_velocity.y;
+                }
+
+                let message = if Collision::Bottom == collision && maybe_paddle.is_none() {
+                    Some(ServerMessage::Scored { by_client_id: 0 })
+                } else if Collision::Top == collision && maybe_paddle.is_none() {
+                    Some(ServerMessage::Scored { by_client_id: 1 })
+                } else {
+                    None
+                };
+                if let Some(message) = message {
+                    endpoint.try_broadcast_message_on(ServerChannel::GameEvents, message);
                 }
 
                 endpoint.try_broadcast_message_on(
@@ -365,33 +350,8 @@ fn start_game(
                 offset_x + column as f32 * (BRICK_SIZE.x + GAP_BETWEEN_BRICKS),
                 offset_y + row as f32 * (BRICK_SIZE.y + GAP_BETWEEN_BRICKS),
             );
-
-            // brick
-            commands.spawn((
-                Transform {
-                    translation: brick_position.extend(0.0),
-                    scale: Vec3::new(BRICK_SIZE.x, BRICK_SIZE.y, 1.0),
-                    ..default()
-                },
-                Brick(brick_id),
-                Collider,
-            ));
-            brick_id += 1;
         }
     }
-    endpoint
-        .send_group_message(
-            players.map.keys(),
-            ServerMessage::SpawnBricks {
-                offset: Vec2 {
-                    x: offset_x,
-                    y: offset_y,
-                },
-                rows: n_rows,
-                columns: n_columns,
-            },
-        )
-        .unwrap();
 
     endpoint
         .send_group_message(players.map.keys(), ServerMessage::StartGame {})

@@ -13,6 +13,8 @@ pub(crate) enum PaddleInput {
     None,
     Left,
     Right,
+    KeyA,
+    KeyD,
 }
 
 // Messages from clients
@@ -38,16 +40,18 @@ pub(crate) enum ServerMessage {
         position: Vec3,
         direction: Vec2,
     },
-    SpawnBricks {
-        offset: Vec2,
-        rows: usize,
-        columns: usize,
-    },
     StartGame,
     BrickDestroyed {
         by_client_id: ClientId,
         brick_id: BrickId,
     },
+    Scored {
+        by_client_id: ClientId,
+    },
+    // SetScore {
+    //     score_a: i32,
+    //     score_b: i32,
+    // },
     BallCollided {
         owner_client_id: ClientId,
         entity: Entity,

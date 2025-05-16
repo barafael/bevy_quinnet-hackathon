@@ -45,7 +45,7 @@ Quinnet can be used as a transport layer. It currently features:
 - Both client & server accept custom protocol structs/enums defined by the user as the message format (as well as raw bytes).
 - Communications are encrypted, and the client can [authenticate the server](#certificates-and-server-authentication).
 
-Although Quinn and parts of Quinnet are asynchronous, the APIs exposed by Quinnet for the client and server are synchronous. This makes the surface API easy to work with and adapted to a Bevy usage.
+Although Quinn and parts of Quinnetevent_loop are asynchronous, the APIs exposed by Quinnet for the client and server are synchronous. This makes the surface API easy to work with and adapted to a Bevy usage.
 The implementation uses [tokio channels](https://tokio.rs/tokio/tutorial/channels) internally to communicate with the networking async tasks.
 
 ## Quickstart
@@ -77,7 +77,7 @@ fn start_connection(client: ResMut<QuinnetClient>) {
             CertificateVerificationMode::SkipVerification,
             ChannelsConfiguration::default(),
         );
-    
+
     // When trully connected, you will receive a ConnectionEvent
 ```
 
@@ -157,7 +157,7 @@ fn handle_client_messages(
                         )
                         .unwrap();
                     /*...*/
-                }           
+                }
             }
         }
     }
@@ -218,7 +218,7 @@ server.endpoint().send_message_on(client_id, chat_channel, chat_message);
 Bevy Quinnet (through Quinn & QUIC) uses TLS 1.3 for authentication, the server needs to provide the client with a certificate confirming its identity, and the client must be configured to trust the certificates it receives from the server.
 
 Here are the current options available to the server and client plugins for the server authentication:
-- Client : 
+- Client :
     - [x] Skip certificate verification (messages are still encrypted, but the server is not authentified)
     - [x] Accept certificates issued by a Certificate Authority (implemented in [Quinn](https://github.com/quinn-rs/quinn), using [rustls](https://github.com/rustls/rustls))
     - [x] [Trust on first use](https://en.wikipedia.org/wiki/Trust_on_first_use) certificates (implemented in Quinnet, using [rustls](https://github.com/rustls/rustls))
@@ -246,8 +246,8 @@ On the client:
 On the server:
 
 ```rust
-    // To generate a new self-signed certificate on each startup 
-    server.start_endpoint(/*...*/, CertificateRetrievalMode::GenerateSelfSigned { 
+    // To generate a new self-signed certificate on each startup
+    server.start_endpoint(/*...*/, CertificateRetrievalMode::GenerateSelfSigned {
         server_hostname: Ipv6Addr::LOCALHOST.to_string(),
     });
     // To load a pre-existing one from files

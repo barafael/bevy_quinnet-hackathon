@@ -63,15 +63,12 @@ pub(crate) struct NetworkMapping {
     // Network entity id to local entity id
     map: HashMap<Entity, Entity>,
 }
-#[derive(Resource, Default)]
-pub struct BricksMapping {
-    map: HashMap<BrickId, Entity>,
-}
 
 // This resource tracks the game's score
 #[derive(Resource)]
 pub(crate) struct Scoreboard {
-    pub(crate) score: i32,
+    pub(crate) score_a: i32,
+    pub(crate) score_b: i32,
 }
 
 #[derive(Component)]
@@ -126,41 +123,6 @@ fn spawn_paddle(commands: &mut Commands, position: &Vec3, owned: bool) -> Entity
         .id()
 }
 
-pub(crate) fn spawn_bricks(
-    commands: &mut Commands,
-    bricks: &mut ResMut<BricksMapping>,
-    offset: Vec2,
-    rows: usize,
-    columns: usize,
-) {
-    let mut brick_id = 0;
-    for row in 0..rows {
-        for column in 0..columns {
-            let brick_position = Vec2::new(
-                offset.x + column as f32 * (BRICK_SIZE.x + GAP_BETWEEN_BRICKS),
-                offset.y + row as f32 * (BRICK_SIZE.y + GAP_BETWEEN_BRICKS),
-            );
-
-            let brick = commands
-                .spawn((
-                    Sprite {
-                        color: BRICK_COLOR,
-                        ..default()
-                    },
-                    Transform {
-                        translation: brick_position.extend(0.0),
-                        scale: Vec3::new(BRICK_SIZE.x, BRICK_SIZE.y, 1.0),
-                        ..default()
-                    },
-                    Brick,
-                ))
-                .id();
-            bricks.map.insert(brick_id, brick);
-            brick_id += 1;
-        }
-    }
-}
-
 pub(crate) fn handle_server_messages(
     mut commands: Commands,
     mut client: ResMut<QuinnetClient>,
@@ -176,7 +138,6 @@ pub(crate) fn handle_server_messages(
         ),
         (With<Ball>, Without<Paddle>),
     >,
-    mut bricks: ResMut<BricksMapping>,
     mut scoreboard: ResMut<Scoreboard>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -221,23 +182,23 @@ pub(crate) fn handle_server_messages(
                     .id();
                 entity_mapping.map.insert(entity, ball);
             }
-            ServerMessage::SpawnBricks {
-                offset,
-                rows,
-                columns,
-            } => spawn_bricks(&mut commands, &mut bricks, offset, rows, columns),
             ServerMessage::StartGame {} => next_state.set(GameState::Running),
             ServerMessage::BrickDestroyed {
                 by_client_id,
                 brick_id,
             } => {
                 if by_client_id == client_data.self_id {
-                    scoreboard.score += 1;
+                    scoreboard.score_a += 1;
                 } else {
-                    scoreboard.score -= 1;
+                    scoreboard.score_b += 1;
                 }
-                if let Some(brick_entity) = bricks.map.get(&brick_id) {
-                    commands.entity(*brick_entity).despawn();
+            }
+            ServerMessage::Scored { by_client_id } => {
+                // if by_client_id == client_data.self_id {
+                if by_client_id == 0 {
+                    scoreboard.score_a += 1;
+                } else {
+                    scoreboard.score_b += 1;
                 }
             }
             ServerMessage::BallCollided {
@@ -283,10 +244,16 @@ pub(crate) fn move_paddle(
 ) {
     let mut paddle_input = PaddleInput::None;
 
+    if keyboard_input.pressed(KeyCode::KeyA) {
+        paddle_input = PaddleInput::KeyA;
+    }
+    if keyboard_input.pressed(KeyCode::KeyD) {
+        paddle_input = PaddleInput::KeyD;
+    }
+
     if keyboard_input.pressed(KeyCode::ArrowLeft) {
         paddle_input = PaddleInput::Left;
     }
-
     if keyboard_input.pressed(KeyCode::ArrowRight) {
         paddle_input = PaddleInput::Right;
     }
@@ -307,8 +274,8 @@ pub(crate) fn update_scoreboard(
     mut query: Single<(&mut TextSpan, &mut TextColor), With<Score>>,
 ) {
     let (ref mut text, ref mut text_color) = query.deref_mut();
-    text.0 = scoreboard.score.to_string();
-    text_color.0 = player_color_from_bool(scoreboard.score >= 0);
+    text.0 = format!("{}-{}", scoreboard.score_a, scoreboard.score_b);
+    text_color.0 = Color::BLACK;
 }
 
 pub(crate) fn play_collision_sound(

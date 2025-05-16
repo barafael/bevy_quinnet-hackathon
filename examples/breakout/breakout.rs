@@ -128,10 +128,12 @@ fn main() {
     app.init_state::<GameState>();
     app.insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(server::Players::default())
-        .insert_resource(client::Scoreboard { score: 0 })
+        .insert_resource(client::Scoreboard {
+            score_a: 0,
+            score_b: 0,
+        })
         .insert_resource(client::ClientData::default())
-        .insert_resource(client::NetworkMapping::default())
-        .insert_resource(client::BricksMapping::default());
+        .insert_resource(client::NetworkMapping::default());
 
     // ------ Main menu
     app.add_systems(Update, close_on_esc)
